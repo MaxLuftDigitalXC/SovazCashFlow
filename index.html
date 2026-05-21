@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOVAZ Cash Flow & Inventory Forecasting Model</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="/styles.css">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="dark-theme">
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-icon">
+          <i data-lucide="trending-up"></i>
+        </div>
+        <div class="brand-text">
+          <h1>SOVAZ</h1>
+          <span data-i18n="app_subtitle">Cash Flow & Inventory Forecasting</span>
+        </div>
+      </div>
+
+      <!-- Scenario & Language Controls Row -->
+      <div class="header-controls-container">
+        <!-- Scenario Management -->
+        <div class="scenario-controls card-glass">
+          <div class="input-group">
+            <label for="scenario-select"><i data-lucide="layers"></i> <span data-i18n="select_scenario">Scenario</span></label>
+            <select id="scenario-select" class="form-control">
+              <!-- Scenarios injected via JS -->
+            </select>
+          </div>
+          <div class="button-group">
+            <button id="btn-clone-scenario" class="btn btn-secondary" title="Clone current scenario">
+              <i data-lucide="copy"></i> <span data-i18n="btn_clone">Clone</span>
+            </button>
+            <button id="btn-new-scenario" class="btn btn-secondary" title="Create a blank scenario">
+              <i data-lucide="plus"></i> <span data-i18n="btn_new">New</span>
+            </button>
+            <button id="btn-delete-scenario" class="btn btn-danger" title="Delete current scenario">
+              <i data-lucide="trash-2"></i> <span data-i18n="btn_delete">Delete</span>
+            </button>
+            <button id="btn-reset-defaults" class="btn btn-secondary" title="Reset all scenarios to default">
+              <i data-lucide="rotate-ccw"></i> <span data-i18n="btn_reset">Reset</span>
+            </button>
+            <div class="divider"></div>
+            <button id="btn-export" class="btn btn-outline" title="Export Scenarios to JSON file">
+              <i data-lucide="download"></i> <span data-i18n="btn_export">Export</span>
+            </button>
+            <button id="btn-import-trigger" class="btn btn-outline" title="Import Scenarios from JSON file">
+              <i data-lucide="upload"></i> <span data-i18n="btn_import">Import</span>
+            </button>
+            <input type="file" id="file-import" style="display: none;" accept=".json">
+          </div>
+        </div>
+
+        <!-- Language Selector -->
+        <div class="language-controls card-glass">
+          <div class="input-group">
+            <label for="lang-select"><i data-lucide="globe"></i> <span data-i18n="language_label">Language</span></label>
+            <select id="lang-select" class="form-control lang-dropdown">
+              <option value="en">English (EN)</option>
+              <option value="de">Deutsch (DE)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Top level metrics summary cards -->
+    <section class="kpi-container">
+      <div class="kpi-card card-glass" id="kpi-ending-cash">
+        <div class="kpi-icon"><i data-lucide="wallet"></i></div>
+        <div class="kpi-data">
+          <h3><span data-i18n="kpi_ending_cash_title">Ending Cash Balance</span></h3>
+          <p class="value" id="val-ending-cash">$0.00</p>
+          <span class="subtext" id="sub-ending-cash" data-i18n="kpi_ending_cash_sub_ok">Month 12 cash on hand</span>
+        </div>
+      </div>
+      <div class="kpi-card card-glass" id="kpi-peak-capital">
+        <div class="kpi-icon"><i data-lucide="landmark"></i></div>
+        <div class="kpi-data">
+          <h3><span data-i18n="kpi_peak_cap_title">Peak Capital Required</span></h3>
+          <p class="value text-warning" id="val-peak-capital">$0.00</p>
+          <span class="subtext" data-i18n="kpi_peak_cap_sub">Maximum cash deficit</span>
+        </div>
+      </div>
+      <div class="kpi-card card-glass">
+        <div class="kpi-icon text-success"><i data-lucide="dollar-sign"></i></div>
+        <div class="kpi-data">
+          <h3><span data-i18n="kpi_revenue_title">Total Revenue (12M)</span></h3>
+          <p class="value" id="val-total-rev">$0.00</p>
+          <span class="subtext" id="val-gross-margin">GP Margin: 0%</span>
+        </div>
+      </div>
+      <div class="kpi-card card-glass" id="kpi-stockouts">
+        <div class="kpi-icon"><i data-lucide="alert-triangle"></i></div>
+        <div class="kpi-data">
+          <h3><span data-i18n="kpi_stockouts_title">Stockout Incidents</span></h3>
+          <p class="value" id="val-stockouts">0</p>
+          <span class="subtext" id="val-unmet-demand">0 units unmet demand</span>
+        </div>
+      </div>
+      <div class="kpi-card card-glass">
+        <div class="kpi-icon text-info"><i data-lucide="package"></i></div>
+        <div class="kpi-data">
+          <h3><span data-i18n="kpi_ending_inv_title">Ending Inventory Value</span></h3>
+          <p class="value" id="val-ending-inv-val">$0.00</p>
+          <span class="subtext" data-i18n="kpi_ending_inv_sub">At cost in Month 12</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Workspace Grid -->
+    <div class="workspace-grid">
+      <!-- Left Sidebar: Global Assumptions & Product Settings -->
+      <aside class="sidebar card-glass">
+        <div class="sidebar-header">
+          <h2><i data-lucide="sliders"></i> <span data-i18n="param_header">Parameters & Assumptions</span></h2>
+        </div>
+
+        <div class="tab-container sidebar-tabs">
+          <div class="tab-headers">
+            <button class="tab-header active" data-tab="tab-global" data-i18n="tab_global">Global Settings</button>
+            <button class="tab-header" data-tab="tab-products" data-i18n="tab_products">Product Settings</button>
+          </div>
+
+          <div class="tab-contents">
+            <!-- Global Settings Tab -->
+            <div class="tab-content active" id="tab-global">
+              <div class="form-section">
+                <h3 data-i18n="sec_scen_props">Scenario Properties</h3>
+                
+                <div class="form-group">
+                  <label for="input-scenario-name"><i data-lucide="edit-3"></i> <span data-i18n="lbl_scen_name">Scenario Name</span></label>
+                  <input type="text" id="input-scenario-name" class="form-control" data-i18n="ph_scen_name" placeholder="Scenario Name">
+                </div>
+
+                <div class="form-group">
+                  <label for="input-scenario-desc"><i data-lucide="info"></i> <span data-i18n="lbl_scen_desc">Description</span></label>
+                  <textarea id="input-scenario-desc" class="form-control" style="resize: vertical; min-height: 60px; font-family: inherit; font-size: 0.85rem;" data-i18n="ph_scen_desc" placeholder="Scenario description and key assumptions..."></textarea>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <h3 data-i18n="sec_finance">Finance & Cash Flow</h3>
+                
+                <div class="form-group">
+                  <label for="input-starting-cash" data-i18n="lbl_starting_cash">Starting Cash Balance ($)</label>
+                  <div class="slider-input-container">
+                    <input type="range" id="slider-starting-cash" min="5000" max="500000" step="5000" value="50000">
+                    <input type="number" id="input-starting-cash" class="form-control text-right" value="50000">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="input-fixed-overhead" data-i18n="lbl_fixed_overhead">Monthly Fixed Overhead ($)</label>
+                  <div class="slider-input-container">
+                    <input type="range" id="slider-fixed-overhead" min="0" max="50000" step="1000" value="5000">
+                    <input type="number" id="input-fixed-overhead" class="form-control text-right" value="5000">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="input-payment-terms-cust" data-i18n="lbl_pay_terms_cust">Customer Payment Terms (Days)</label>
+                  <select id="input-payment-terms-cust" class="form-control">
+                    <option value="0" data-i18n="opt_terms_0">0 Days (Instant Cash Sales)</option>
+                    <option value="30" data-i18n="opt_terms_30">30 Days (Net 30)</option>
+                    <option value="60" data-i18n="opt_terms_60">60 Days (Net 60)</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="input-marketing-pct" data-i18n="lbl_marketing_pct">Marketing Spend (% of Revenue)</label>
+                  <div class="slider-input-container">
+                    <input type="range" id="slider-marketing-pct" min="0" max="50" step="1" value="0">
+                    <input type="number" id="input-marketing-pct" class="form-control text-right" value="0" min="0" max="100">%
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <h3 data-i18n="sec_demand">Demand Modeling</h3>
+                
+                <div class="form-group">
+                  <label for="input-demand-model" data-i18n="lbl_demand_model">Demand Calculation Model</label>
+                  <select id="input-demand-model" class="form-control">
+                    <option value="sealerDriven" data-i18n="opt_model_sealer">Machine-Driven Consumption (Recommended)</option>
+                    <option value="independent" data-i18n="opt_model_independent">Independent Growth Rates (Table Values)</option>
+                  </select>
+                  <p class="help-text sealerDriven-only" data-i18n="help_sealer_only">
+                    Cans & Lids demand is dynamically calculated based on actual sealer machines sold.
+                  </p>
+                  <p class="help-text independent-only text-warning hide" data-i18n="help_independent_only">
+                    Cans grow at 100% MoM independently, leading to massive exponential demand by Month 12.
+                  </p>
+                </div>
+
+                <div class="form-group sealerDriven-only">
+                  <label for="input-cans-per-sealer" data-i18n="lbl_cans_per_sealer">Cans/Lids Consumed per Sealer / Month</label>
+                  <input type="number" id="input-cans-per-sealer" class="form-control" value="1000" min="10" max="10000">
+                </div>
+
+                <div class="form-group sealerDriven-only">
+                  <label data-i18n="lbl_can_ratio">Can Demand Allocation Ratio</label>
+                  <div class="ratio-inputs">
+                    <div class="ratio-input-row">
+                      <span>250ml:</span>
+                      <input type="number" id="input-ratio-250" class="form-control size-sm text-right" value="25" min="0" max="100">%
+                    </div>
+                    <div class="ratio-input-row">
+                      <span>300ml:</span>
+                      <input type="number" id="input-ratio-300" class="form-control size-sm text-right" value="25" min="0" max="100">%
+                    </div>
+                    <div class="ratio-input-row">
+                      <span>500ml:</span>
+                      <input type="number" id="input-ratio-500" class="form-control size-sm text-right" value="50" min="0" max="100">%
+                    </div>
+                  </div>
+                  <span id="ratio-error" class="text-danger hide" data-i18n="lbl_ratio_err">Ratios must sum to 100%!</span>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <h3 data-i18n="sec_replenish">Supply Chain Replenishment</h3>
+                
+                <div class="form-group">
+                  <label for="input-replenish-strategy" data-i18n="lbl_strategy">Reordering Strategy</label>
+                  <select id="input-replenish-strategy" class="form-control">
+                    <option value="JIT" data-i18n="opt_strat_jit">Just-In-Time (Order for Month N+2 Demand)</option>
+                    <option value="SafetyStock" data-i18n="opt_strat_ss">Safety Stock (Days of Coverage)</option>
+                    <option value="Manual" data-i18n="opt_strat_manual">Manual Order Planning</option>
+                  </select>
+                </div>
+
+                <div class="form-group ss-only hide">
+                  <label for="input-safety-stock-days" data-i18n="lbl_ss_days">Safety Stock Days of Coverage</label>
+                  <div class="slider-input-container">
+                    <input type="range" id="slider-safety-stock-days" min="5" max="90" step="5" value="30">
+                    <input type="number" id="input-safety-stock-days" class="form-control text-right" value="30">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Product Settings Tab -->
+            <div class="tab-content" id="tab-products">
+              <div class="form-group">
+                <label for="product-settings-select" data-i18n="lbl_select_prod">Select Product to Edit</label>
+                <select id="product-settings-select" class="form-control">
+                  <!-- Products injected via JS -->
+                </select>
+              </div>
+
+              <div id="product-edit-form" class="form-section">
+                <!-- Editable fields loaded by JS -->
+                <div class="form-group">
+                  <label for="prod-unit-cost" data-i18n="lbl_unit_cost">Unit Cost ($)</label>
+                  <input type="number" id="prod-unit-cost" class="form-control" step="0.01">
+                </div>
+                <div class="form-group">
+                  <label for="prod-retail-price" data-i18n="lbl_retail_price">Retail Price ($)</label>
+                  <input type="number" id="prod-retail-price" class="form-control" step="0.01">
+                </div>
+                <div class="form-group">
+                  <label for="prod-initial-sales" data-i18n="lbl_initial_sales">Initial Monthly Sales (Month 1)</label>
+                  <input type="number" id="prod-initial-sales" class="form-control">
+                </div>
+                <div class="form-group">
+                  <label for="prod-growth-rate" data-i18n="lbl_growth_rate">MoM Growth Rate (%)</label>
+                  <input type="number" id="prod-growth-rate" class="form-control" step="0.1">
+                </div>
+                <div class="form-group">
+                  <label for="prod-initial-stock" data-i18n="lbl_initial_stock">Initial Starting Stock (Units)</label>
+                  <input type="number" id="prod-initial-stock" class="form-control">
+                </div>
+                <div class="form-group">
+                  <label for="prod-lead-time" data-i18n="lbl_lead_time">Delivery Lead Time (Days)</label>
+                  <input type="number" id="prod-lead-time" class="form-control" min="0">
+                </div>
+                <div class="form-group">
+                  <label for="prod-moq" data-i18n="lbl_moq">Minimum Order Quantity (MOQ)</label>
+                  <input type="number" id="prod-moq" class="form-control" min="1">
+                </div>
+                <div class="form-group">
+                  <label for="prod-deposit" data-i18n="lbl_deposit">Supplier Deposit Payment (%)</label>
+                  <input type="number" id="prod-deposit" class="form-control" min="0" max="100" step="1">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right Column: Graphs and Detailed Grid Sheets -->
+      <main class="main-content">
+        <!-- Visual Charts Card -->
+        <section class="charts-card card-glass">
+          <div class="card-header">
+            <h2><i data-lucide="bar-chart-3"></i> <span data-i18n="chart_title">Visual Projections</span></h2>
+            <div class="tab-headers mini-tabs">
+              <button class="chart-tab-header active" data-chart="cash" data-i18n="tab_chart_cash">Cash Flow</button>
+              <button class="chart-tab-header" data-chart="inventory" data-i18n="tab_chart_inv">Inventory Levels</button>
+              <button class="chart-tab-header" data-chart="revenue" data-i18n="tab_chart_rev">Revenue vs Costs</button>
+            </div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="projectionChart"></canvas>
+          </div>
+        </section>
+
+        <!-- Detailed Calculation Grid Sheets -->
+        <section class="grid-card card-glass">
+          <div class="card-header flex-column md-flex-row">
+            <div class="flex-column">
+              <h2><i data-lucide="table"></i> <span data-i18n="grid_title">Detailed 12-Month Sheet</span></h2>
+              <span class="subtext" data-i18n="grid_subtitle">Configure parameters and examine month-by-month cash and inventory flows</span>
+            </div>
+            
+            <div class="tab-headers grid-tabs overflow-x-auto" id="grid-tab-headers-container">
+              <!-- Grid tabs will be populated dynamically to ease language toggling -->
+            </div>
+          </div>
+
+          <div class="grid-table-container">
+            <table class="grid-table" id="forecast-table">
+              <!-- Dynamically populated via JS -->
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- App Script Entry point (Module) -->
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

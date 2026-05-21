@@ -1,0 +1,15 @@
+{
+  "name": "sovaz-cashflow-forecasting",
+  "version": "1.0.0",
+  "description": "12-Month Cash Flow and Inventory Management Model",
+  "main": "app.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.2.0"
+  }
+}
