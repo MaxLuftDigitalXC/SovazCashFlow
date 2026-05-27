@@ -83,6 +83,13 @@ export const DEFAULT_SCENARIOS = [
     manualOrders: {}, // { productId: { monthIndex: qty } }
     customDemand: {}, // { productId: { monthIndex: qty } }
     demandModel: 'sealerDriven',
+    leaseModels: {
+      'lease-1': { id: 'lease-1', fee: 49, commitment: 1000, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 },
+      'lease-2': { id: 'lease-2', fee: 39, commitment: 1500, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 },
+      'lease-3': { id: 'lease-3', fee: 29, commitment: 2000, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 },
+      'lease-4': { id: 'lease-4', fee: 19, commitment: 3000, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 },
+      'lease-5': { id: 'lease-5', fee: 0, commitment: 4000, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 }
+    },
     cansRatio: {
       'prod-2': 25,
       'prod-3': 25,
@@ -104,6 +111,13 @@ export const DEFAULT_SCENARIOS = [
     manualOrders: {},
     customDemand: {},
     demandModel: 'independent',
+    leaseModels: {
+      'lease-1': { id: 'lease-1', fee: 49, commitment: 1000, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 },
+      'lease-2': { id: 'lease-2', fee: 39, commitment: 1500, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 },
+      'lease-3': { id: 'lease-3', fee: 29, commitment: 2000, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 },
+      'lease-4': { id: 'lease-4', fee: 19, commitment: 3000, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 },
+      'lease-5': { id: 'lease-5', fee: 0, commitment: 4000, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 }
+    },
     cansRatio: {
       'prod-2': 25,
       'prod-3': 25,
@@ -127,6 +141,13 @@ export const DEFAULT_SCENARIOS = [
     manualOrders: {},
     customDemand: {},
     demandModel: 'sealerDriven',
+    leaseModels: {
+      'lease-1': { id: 'lease-1', fee: 49, commitment: 1000, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 },
+      'lease-2': { id: 'lease-2', fee: 39, commitment: 1500, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 },
+      'lease-3': { id: 'lease-3', fee: 29, commitment: 2000, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 },
+      'lease-4': { id: 'lease-4', fee: 19, commitment: 3000, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 },
+      'lease-5': { id: 'lease-5', fee: 0, commitment: 4000, initialSalesVolume: 0, growthRateMoM: 5.0, downpayment: 200 }
+    },
     cansRatio: {
       'prod-2': 25,
       'prod-3': 25,
@@ -160,6 +181,13 @@ export function runProjection(scenario, baseProducts = DEFAULT_PRODUCTS) {
   // Pre-calculate unconstrained demand forecasts for ALL 14 months (months 1 to 14)
   // This is required to determine lead-time ordering in months 11 and 12 (arriving in months 13 and 14).
   const projectedDemand = {}; // { productId: [month0, month1, ... month13] }
+  const projectedLeaseDemand = {}; // { leaseId: [month0, month1, ... month13] }
+  
+  if (scenario.leaseModels) {
+    for (const lId in scenario.leaseModels) {
+      projectedLeaseDemand[lId] = new Array(monthsCount + 2).fill(0);
+    }
+  }
   
   for (const pid in products) {
     projectedDemand[pid] = new Array(monthsCount + 2).fill(0);
@@ -187,26 +215,46 @@ export function runProjection(scenario, baseProducts = DEFAULT_PRODUCTS) {
     const sRate = sealer.growthRateMoM / 100;
     for (let m = 0; m < monthsCount + 2; m++) {
       let val = Math.round(sealer.initialSalesVolume * Math.pow(1 + sRate, m));
-      // Apply custom demand override if defined for sealer machine
       if (scenario.customDemand && scenario.customDemand['prod-1'] && scenario.customDemand['prod-1'][m] !== undefined) {
         val = scenario.customDemand['prod-1'][m];
       }
       projectedDemand['prod-1'][m] = val;
+      
+      // Calculate lease demand
+      if (scenario.leaseModels) {
+        for (const [lId, lModel] of Object.entries(scenario.leaseModels)) {
+          const lRate = lModel.growthRateMoM / 100;
+          let lVal = Math.round(lModel.initialSalesVolume * Math.pow(1 + lRate, m));
+          // customDemand for leases could be added here if needed in the future
+          projectedLeaseDemand[lId][m] = lVal;
+        }
+      }
     }
     
     // Step 2: Cans & Lids demand is computed dynamically in the main loop since it depends on ACTUAL cumulative sealer sales!
     // However, for future ordering predictions, we also pre-calculate standard demand assuming no stockouts.
     // Let's create an ideal sealer path for months 1 to 14 to estimate future demand.
     const idealCumulativeSealers = [];
+    const idealCumulativeLeaseCans = [];
     let cumulative = 0;
+    let activeLeasesFuture = { 'lease-1': 0, 'lease-2': 0, 'lease-3': 0, 'lease-4': 0, 'lease-5': 0 };
     for (let m = 0; m < monthsCount + 2; m++) {
       cumulative += projectedDemand['prod-1'][m];
       idealCumulativeSealers.push(cumulative);
+      
+      let leaseCansThisMonth = 0;
+      if (scenario.leaseModels) {
+        for (const [lId, lModel] of Object.entries(scenario.leaseModels)) {
+          activeLeasesFuture[lId] += projectedLeaseDemand[lId][m] || 0;
+          leaseCansThisMonth += activeLeasesFuture[lId] * lModel.commitment;
+        }
+      }
+      idealCumulativeLeaseCans.push(leaseCansThisMonth);
     }
 
     // Set approximate future demands for reorder logic estimates
     for (let m = 0; m < monthsCount + 2; m++) {
-      const totalCansDemand = idealCumulativeSealers[m] * scenario.cansPerSealerLimit;
+      const totalCansDemand = (idealCumulativeSealers[m] * scenario.cansPerSealerLimit) + idealCumulativeLeaseCans[m];
       
       projectedDemand['prod-2'][m] = Math.round(totalCansDemand * (scenario.cansRatio['prod-2'] / 100));
       projectedDemand['prod-3'][m] = Math.round(totalCansDemand * (scenario.cansRatio['prod-3'] / 100));
@@ -232,12 +280,28 @@ export function runProjection(scenario, baseProducts = DEFAULT_PRODUCTS) {
     };
   }
 
+  const leaseResults = {
+    activeLeases: {},
+    newLeases: {},
+    stockoutLeases: {},
+    revenue: new Array(monthsCount).fill(0),
+    cumulativeCanCommitment: new Array(monthsCount).fill(0)
+  };
+  if (scenario.leaseModels) {
+    for (const lId in scenario.leaseModels) {
+      leaseResults.activeLeases[lId] = new Array(monthsCount).fill(0);
+      leaseResults.newLeases[lId] = new Array(monthsCount).fill(0);
+      leaseResults.stockoutLeases[lId] = new Array(monthsCount).fill(0);
+    }
+  }
+
   // Track global month-over-month cash flows
   const cashFlow = {
     startingCash: new Array(monthsCount).fill(0),
     revenueGenerated: new Array(monthsCount).fill(0),
     cashCollections: new Array(monthsCount).fill(0),
     supplierPayments: new Array(monthsCount).fill(0),
+    leaseCollections: new Array(monthsCount).fill(0),
     fixedOverhead: new Array(monthsCount).fill(0),
     marketingSpend: new Array(monthsCount).fill(0),
     netCashFlow: new Array(monthsCount).fill(0),
@@ -266,20 +330,84 @@ export function runProjection(scenario, baseProducts = DEFAULT_PRODUCTS) {
 
     // 3. Determine Dynamic Demand for Month M (Sealer-Driven)
     if (scenario.demandModel === 'sealerDriven') {
-      // First, calculate Sealer (Product 1) actual sales in Month M since we need it for can demand
       const sealerResults = pResults['prod-1'];
-      const sealerDemand = projectedDemand['prod-1'][m];
+      const outrightDemand = projectedDemand['prod-1'][m];
+      
+      let totalLeaseDemand = 0;
+      if (scenario.leaseModels) {
+        for (const lId in scenario.leaseModels) {
+          totalLeaseDemand += projectedLeaseDemand[lId][m] || 0;
+        }
+      }
+      
+      const totalSealerDemand = outrightDemand + totalLeaseDemand;
       const sealerAvailable = sealerResults.startingStock[m] + sealerResults.received[m];
       
-      sealerResults.sales[m] = Math.min(sealerDemand, sealerAvailable);
-      sealerResults.stockout[m] = sealerDemand - sealerResults.sales[m];
-      sealerResults.endingStock[m] = sealerAvailable - sealerResults.sales[m];
+      const totalSealerActual = Math.min(totalSealerDemand, sealerAvailable);
+      const totalSealerStockout = totalSealerDemand - totalSealerActual;
+      
+      let actualOutright = 0;
+      if (totalSealerDemand > 0) {
+        const outrightRatio = outrightDemand / totalSealerDemand;
+        actualOutright = Math.round(totalSealerActual * outrightRatio);
+        
+        let allocatedLeases = 0;
+        if (scenario.leaseModels) {
+          for (const lId in scenario.leaseModels) {
+            const lRatio = (projectedLeaseDemand[lId][m] || 0) / totalSealerDemand;
+            const lActual = Math.round(totalSealerActual * lRatio);
+            leaseResults.newLeases[lId][m] = lActual;
+            leaseResults.stockoutLeases[lId][m] = (projectedLeaseDemand[lId][m] || 0) - lActual;
+            allocatedLeases += lActual;
+            
+            // update active leases
+            leaseResults.activeLeases[lId][m] = (m > 0 ? leaseResults.activeLeases[lId][m-1] : 0) + lActual;
+          }
+        }
+        
+        // fix rounding errors
+        const diff = totalSealerActual - (actualOutright + allocatedLeases);
+        actualOutright += diff;
+      } else {
+        // If demand is 0, active leases still carry over
+        if (scenario.leaseModels) {
+          for (const lId in scenario.leaseModels) {
+            leaseResults.activeLeases[lId][m] = (m > 0 ? leaseResults.activeLeases[lId][m-1] : 0);
+          }
+        }
+      }
 
-      // Accumulate sealers sold to date
+      sealerResults.sales[m] = actualOutright;
+      sealerResults.stockout[m] = outrightDemand - actualOutright;
+      // All shipped sealers (outright + leased) deplete inventory and accrue COGS!
+      sealerResults.endingStock[m] = sealerAvailable - totalSealerActual;
+      
+      // Since leased machines deplete inventory, their COGS is handled differently.
+      // We will set a custom COGS property on the sealer results later, 
+      // but for now, we just need to ensure `sales` for COGS purposes includes leases.
+      // ACTUALLY, it's easier to add leases to sealerResults.sales for COGS, but then revenue is wrong.
+      // Let's keep `sales` as outright sales, and compute leased COGS manually.
+      // Wait, let's store total units shipped for COGS.
+      sealerResults._totalShippedThisMonth = totalSealerActual;
+
+      // Accumulate outright sealers sold to date
       cumulativeActualSealersSold += sealerResults.sales[m];
+      
+      // Calculate active lease can commitments
+      let currentLeaseCanCommitment = 0;
+      let leaseRevenueThisMonth = 0;
+      if (scenario.leaseModels) {
+        for (const [lId, lModel] of Object.entries(scenario.leaseModels)) {
+          currentLeaseCanCommitment += leaseResults.activeLeases[lId][m] * lModel.commitment;
+          leaseRevenueThisMonth += (leaseResults.newLeases[lId][m] * lModel.downpayment);
+          leaseRevenueThisMonth += (leaseResults.activeLeases[lId][m] * lModel.fee);
+        }
+      }
+      leaseResults.cumulativeCanCommitment[m] = currentLeaseCanCommitment;
+      leaseResults.revenue[m] = leaseRevenueThisMonth;
 
       // Dynamically calculate demand for Cans & Lids in Month M
-      const totalCanDemand = cumulativeActualSealersSold * scenario.cansPerSealerLimit;
+      const totalCanDemand = (cumulativeActualSealersSold * scenario.cansPerSealerLimit) + currentLeaseCanCommitment;
       
       projectedDemand['prod-2'][m] = Math.round(totalCanDemand * (scenario.cansRatio['prod-2'] / 100));
       projectedDemand['prod-3'][m] = Math.round(totalCanDemand * (scenario.cansRatio['prod-3'] / 100));
@@ -318,7 +446,12 @@ export function runProjection(scenario, baseProducts = DEFAULT_PRODUCTS) {
       const results = pResults[pid];
       
       results.revenue[m] = results.sales[m] * p.retailPrice;
-      results.cogs[m] = results.sales[m] * p.unitCost;
+      // COGS needs to include leased machines if it's the sealer
+      if (pid === 'prod-1' && results._totalShippedThisMonth !== undefined) {
+        results.cogs[m] = results._totalShippedThisMonth * p.unitCost;
+      } else {
+        results.cogs[m] = results.sales[m] * p.unitCost;
+      }
       results.grossProfit[m] = results.revenue[m] - results.cogs[m];
       
       totalSalesRev += results.revenue[m];
@@ -335,6 +468,12 @@ export function runProjection(scenario, baseProducts = DEFAULT_PRODUCTS) {
     } else if (terms === 60) {
       cashFlow.cashCollections[m] = m >= 2 ? cashFlow.revenueGenerated[m - 2] : 0;
     }
+    
+    // Lease collections are instant
+    cashFlow.leaseCollections[m] = leaseResults.revenue[m] || 0;
+    cashFlow.cashCollections[m] += cashFlow.leaseCollections[m];
+    // Also add lease revenue to total revenue so it reflects on KPIs
+    cashFlow.revenueGenerated[m] += cashFlow.leaseCollections[m];
 
     // 6. Replenishment Orders Decided in Month M (to arrive in Month M+2)
     for (const pid in products) {
@@ -359,7 +498,33 @@ export function runProjection(scenario, baseProducts = DEFAULT_PRODUCTS) {
           const estSealerSalesM2 = projectedDemand['prod-1'][m + 2] || 0;
           const estCumulativeSealers = cumulativeActualSealersSold + estSealerSalesM1 + estSealerSalesM2;
           
-          const estTotalCans = estCumulativeSealers * scenario.cansPerSealerLimit;
+          // Add estimated lease demands
+          let estCumulativeLeaseCans = (leaseResults.cumulativeCanCommitment[m] || 0);
+          if (scenario.leaseModels) {
+             let activeLeasesCopy = {...leaseResults.activeLeases};
+             for (const [lId, lModel] of Object.entries(scenario.leaseModels)) {
+                const activeM = activeLeasesCopy[lId][m] || 0;
+                const newM1 = projectedLeaseDemand[lId][m + 1] || 0;
+                const newM2 = projectedLeaseDemand[lId][m + 2] || 0;
+                
+                const activeM1 = activeM + newM1;
+                const activeM2 = activeM1 + newM2;
+                // Add the commitment for M+2
+                estCumulativeLeaseCans = 0; // recalculate for M+2 completely below
+             }
+             
+             let estCommitmentM2 = 0;
+             for (const [lId, lModel] of Object.entries(scenario.leaseModels)) {
+                const activeM = leaseResults.activeLeases[lId][m] || 0;
+                const newM1 = projectedLeaseDemand[lId][m + 1] || 0;
+                const newM2 = projectedLeaseDemand[lId][m + 2] || 0;
+                const activeM2 = activeM + newM1 + newM2;
+                estCommitmentM2 += activeM2 * lModel.commitment;
+             }
+             estCumulativeLeaseCans = estCommitmentM2;
+          }
+          
+          const estTotalCans = (estCumulativeSealers * scenario.cansPerSealerLimit) + estCumulativeLeaseCans;
           if (pid === 'prod-5') {
             targetDemand = estTotalCans;
           } else {
@@ -368,6 +533,14 @@ export function runProjection(scenario, baseProducts = DEFAULT_PRODUCTS) {
         } else {
           // Independent or Sealer itself
           targetDemand = projectedDemand[pid][nextNextMonth] || 0;
+          if (pid === 'prod-1' && scenario.demandModel === 'sealerDriven') {
+             // Add lease demand to sealer demand target
+             if (scenario.leaseModels) {
+               for (const lId in scenario.leaseModels) {
+                 targetDemand += projectedLeaseDemand[lId][nextNextMonth] || 0;
+               }
+             }
+          }
         }
 
         // Step 2: Estimate ending stock of Month M+1 (which is start stock of Month M+2)
@@ -479,6 +652,7 @@ export function runProjection(scenario, baseProducts = DEFAULT_PRODUCTS) {
     scenario,
     products,
     productResults: pResults,
+    leaseResults,
     cashFlow,
     summary: {
       endingCash: cashFlow.endingCash[monthsCount - 1],

@@ -805,3 +805,33 @@ select.form-control {
 .sealerDriven-only.hide, .independent-only.hide, .ss-only.hide {
   display: none;
 }
+
+
+/* Lease Options Settings */
+.lease-option-group {
+  margin-bottom: 1rem;
+  padding: 0.8rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.lease-option-group h4 {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-color);
+  margin-top: 0;
+  margin-bottom: 0.6rem;
+  opacity: 0.9;
+}
+
+.flex-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.flex-half {
+  flex: 1;
+  min-width: 0;
+}

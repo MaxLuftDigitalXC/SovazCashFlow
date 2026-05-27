@@ -49,6 +49,27 @@ export const translations = {
     opt_terms_60: "60 Days (Net 60)",
     lbl_marketing_pct: "Marketing Spend (% of Revenue)",
 
+
+    // Lease Settings
+    sec_lease_plans: "Lease Options Plan",
+    lbl_lease_opt1: "Lease Option 1 ($49/mo, 1000 cans)",
+    lbl_lease_opt2: "Lease Option 2 ($39/mo, 1500 cans)",
+    lbl_lease_opt3: "Lease Option 3 ($29/mo, 2000 cans)",
+    lbl_lease_opt4: "Lease Option 4 ($19/mo, 3000 cans)",
+    lbl_lease_opt5: "Lease Option 5 ($0/mo, 4000 cans)",
+    lbl_lease_vol: "Initial Leases (Month 1)",
+    lbl_lease_growth: "MoM Growth Rate (%)",
+    
+    // Grid Rows
+    row_lease_rev: "Lease Revenue (Fees & Downpayments)",
+    row_outright_plan: "Outright Sales (Plan)",
+    row_outright_actual: "Outright Sales (Actual)",
+    row_lease1_actual: "Lease Option 1 (Actual New)",
+    row_lease2_actual: "Lease Option 2 (Actual New)",
+    row_lease3_actual: "Lease Option 3 (Actual New)",
+    row_lease4_actual: "Lease Option 4 (Actual New)",
+    row_lease5_actual: "Lease Option 5 (Actual New)",
+    row_active_lease: "Cumulative Active Leased Base",
     sec_demand: "Demand Modeling",
     lbl_demand_model: "Demand Calculation Model",
     opt_model_sealer: "Machine-Driven Consumption (Recommended)",

@@ -39,12 +39,23 @@ const selectPaymentTermsCust = document.getElementById('input-payment-terms-cust
 const sliderMarketingPct = document.getElementById('slider-marketing-pct');
 const inputMarketingPct = document.getElementById('input-marketing-pct');
 
+
 // Demand Inputs
 const selectDemandModel = document.getElementById('input-demand-model');
 const inputCansPerSealer = document.getElementById('input-cans-per-sealer');
 const inputRatio250 = document.getElementById('input-ratio-250');
 const inputRatio300 = document.getElementById('input-ratio-300');
 const inputRatio500 = document.getElementById('input-ratio-500');
+
+// Lease Inputs
+const leaseInputs = {};
+for (let i = 1; i <= 5; i++) {
+  leaseInputs[`lease-${i}`] = {
+    vol: document.getElementById(`input-lease${i}-vol`),
+    growth: document.getElementById(`input-lease${i}-growth`)
+  };
+}
+
 
 // Replenishment Inputs
 const selectReplenishStrategy = document.getElementById('input-replenish-strategy');
@@ -175,10 +186,39 @@ function setupEventListeners() {
     saveAndRun();
   });
 
+
   // Cans ratio distribution inputs
   [inputRatio250, inputRatio300, inputRatio500].forEach(input => {
     input.addEventListener('change', validateAndApplyCansRatios);
   });
+
+  // Lease inputs
+  for (let i = 1; i <= 5; i++) {
+    const lId = `lease-${i}`;
+    if (leaseInputs[lId].vol) {
+      leaseInputs[lId].vol.addEventListener('change', (e) => {
+        let val = parseInt(e.target.value, 10);
+        if (isNaN(val) || val < 0) val = 0;
+        if (!currentScenario.leaseModels) currentScenario.leaseModels = {};
+        if (currentScenario.leaseModels[lId]) {
+          currentScenario.leaseModels[lId].initialSalesVolume = val;
+          saveAndRun();
+        }
+      });
+    }
+    if (leaseInputs[lId].growth) {
+      leaseInputs[lId].growth.addEventListener('change', (e) => {
+        let val = parseFloat(e.target.value);
+        if (isNaN(val)) val = 0;
+        if (!currentScenario.leaseModels) currentScenario.leaseModels = {};
+        if (currentScenario.leaseModels[lId]) {
+          currentScenario.leaseModels[lId].growthRateMoM = val;
+          saveAndRun();
+        }
+      });
+    }
+  }
+
 
   // Replenishment Strategy
   selectReplenishStrategy.addEventListener('change', (e) => {
@@ -386,11 +426,23 @@ function syncUIWithScenario() {
   sliderMarketingPct.value = currentScenario.marketingSpendPctOfRevenue;
   inputMarketingPct.value = currentScenario.marketingSpendPctOfRevenue;
   
+
   selectDemandModel.value = currentScenario.demandModel;
   inputCansPerSealer.value = currentScenario.cansPerSealerLimit;
   inputRatio250.value = currentScenario.cansRatio['prod-2'] || 25;
   inputRatio300.value = currentScenario.cansRatio['prod-3'] || 25;
   inputRatio500.value = currentScenario.cansRatio['prod-4'] || 50;
+
+  if (currentScenario.leaseModels) {
+    for (let i = 1; i <= 5; i++) {
+      const lId = `lease-${i}`;
+      if (currentScenario.leaseModels[lId] && leaseInputs[lId].vol && leaseInputs[lId].growth) {
+        leaseInputs[lId].vol.value = currentScenario.leaseModels[lId].initialSalesVolume;
+        leaseInputs[lId].growth.value = currentScenario.leaseModels[lId].growthRateMoM;
+      }
+    }
+  }
+
 
   selectReplenishStrategy.value = currentScenario.replenishmentStrategy;
   sliderSafetyStockDays.value = currentScenario.safetyStockDays || 30;
@@ -665,10 +717,13 @@ function renderAggregatedTableData(table) {
   addRow(t.row_rcv_inv_val, totalReceivedVal, formatUSD);
   addRow(t.row_end_inv_val, totalEndingInvVal, formatUSD, false, true);
 
+
   // 3. Cash Flow section
   addRow(t.row_hdr_cash_flow, new Array(12).fill(''), null, true);
   addRow(t.row_sales_rev, cash.revenueGenerated, formatUSD);
+  addRow(t.row_lease_rev, cash.leaseCollections || new Array(12).fill(0), formatUSD);
   addRow(t.row_cust_receipts, cash.cashCollections, formatUSD, false, false, 'cell-positive');
+
   addRow(t.row_supp_payments, cash.supplierPayments, formatUSD, false, false, 'text-warning');
   addRow(t.row_fixed_overhead, cash.fixedOverhead, formatUSD);
   addRow(t.row_mkt_spend, cash.marketingSpend, formatUSD);
@@ -802,11 +857,38 @@ function renderProductTableData(table, pid) {
     table.appendChild(tr);
   };
 
+
   // 1. Demand
   addRow(t.row_hdr_demand_units, new Array(12).fill(''), null, true);
-  insertDemandRow(t.row_sales_plan, demandList);
-  addRow(t.row_sales_achieved, pr.sales, formatNum);
-  addRow(t.row_unmet_demand, pr.stockout, formatNum);
+  if (pid === 'prod-1' && projectionResults.leaseResults) {
+    insertDemandRow(t.row_outright_plan, demandList);
+    addRow(t.row_outright_actual, pr.sales, formatNum);
+    addRow(t.row_unmet_demand, pr.stockout, formatNum);
+    
+    // Add Leases Actual
+    const lr = projectionResults.leaseResults;
+    if (lr && lr.newLeases) {
+      if (lr.newLeases['lease-1']) addRow(t.row_lease1_actual, lr.newLeases['lease-1'], formatNum);
+      if (lr.newLeases['lease-2']) addRow(t.row_lease2_actual, lr.newLeases['lease-2'], formatNum);
+      if (lr.newLeases['lease-3']) addRow(t.row_lease3_actual, lr.newLeases['lease-3'], formatNum);
+      if (lr.newLeases['lease-4']) addRow(t.row_lease4_actual, lr.newLeases['lease-4'], formatNum);
+      if (lr.newLeases['lease-5']) addRow(t.row_lease5_actual, lr.newLeases['lease-5'], formatNum);
+      
+      // Calculate total active base
+      const totalActive = new Array(12).fill(0);
+      for (let m = 0; m < 12; m++) {
+        for (let i = 1; i <= 5; i++) {
+           totalActive[m] += (lr.activeLeases[`lease-${i}`] && lr.activeLeases[`lease-${i}`][m]) ? lr.activeLeases[`lease-${i}`][m] : 0;
+        }
+      }
+      addRow(t.row_active_lease, totalActive, formatNum, false, false, 'cell-positive');
+    }
+  } else {
+    insertDemandRow(t.row_sales_plan, demandList);
+    addRow(t.row_sales_achieved, pr.sales, formatNum);
+    addRow(t.row_unmet_demand, pr.stockout, formatNum);
+  }
+
 
   // 2. Inventory
   addRow(t.row_hdr_inv_units, new Array(12).fill(''), null, true);
